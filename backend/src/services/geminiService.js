@@ -11,43 +11,75 @@ function fileToGenerativePart(path, mimeType) {
   };
 }
 
-// The "System Prompt" that forces Gemini to be a Detective
-const INVESTIGATOR_PROMPT = `
-  You are 'EchoTrace', a senior forensic investigator AI. 
-  Your job is to analyze disparate pieces of evidence to find the TRUTH.
-  
-  You will receive:
-  1. CCTV Video (Visual Evidence)
-  2. Audio Statement (Verbal Claims)
-  3. Police Report (Written Claims)
-  4. ID Card (Identity Verification)
-
-  TASK:
-  1. TIMELINE: Create a second-by-second timeline of what ACTUALLY happened based on the Video.
-  2. CROSS-REFERENCE: Compare the Video events to the Audio/Text claims. flagging contradictions.
-  3. IDENTITY CHECK: Compare the person in the Video to the ID Card. accurately.
-  
-  OUTPUT FORMAT (Strict JSON):
-  {
-    "caseId": "CASE-AUTO-GEN",
-    "integrityStatus": "VERIFIED_AUTHENTIC" or "SUSPECTED_FAKE",
-    "integrityScore": 0-100,
-    "timeline": [
-      { "time": "MM:SS", "source": "Source Name", "type": "video|audio|text", "event": "Description", "trustScore": 0-100, "flag": "OPTIONAL_WARNING" }
-    ],
-    "contradictions": [
-      { "id": 1, "severity": "CRITICAL|HIGH|MEDIUM", "title": "Short Title", "claim": "What was said", "evidence": "What was seen", "confidence": 0-100 }
-    ],
-    "blindSpots": [
-      { "location": "Where", "reason": "Why it is missing" }
-    ]
-  }
-`;
-
 exports.analyzeCase = async ({ videoPath, audioPath, pdfPath, imagePath }) => {
   const parts = [];
+  
+  // --- THE UPDATED SYSTEM PROMPT ---
+  const INVESTIGATOR_PROMPT = `
+    You are 'EchoTrace', a senior forensic investigator AI. 
+    Your job is to analyze disparate pieces of evidence to find the TRUTH.
+    
+    You will receive:
+    1. CCTV Video (Visual Evidence)
+    2. Audio Statement (Verbal Claims)
+    3. Police Report (Written Claims)
+    4. ID Card (Identity Verification)
 
-  // Add the System Instruction first
+    TASK:
+    1. TIMELINE: Create a granular, second-by-second timeline of what ACTUALLY happened based on the Video.
+    2. CROSS-REFERENCE (CRITICAL): 
+       - Exhaustively compare EVERY specific claim in the Audio and Police Report against the Video.
+       - Do NOT stop at the first contradiction. List ALL discrepancies found.
+       - Check for: Time mismatches, Clothing mismatches, Action mismatches, and Location mismatches.
+    3. BLIND SPOTS: Identify moments where the subject leaves the frame or vision is obscured.
+    4. INTEGRITY CHECK: Analyze the video for deepfake artifacts (unnatural blinking, lighting shadows, pixel blurring).
+
+    OUTPUT FORMAT (Strict JSON Only - No Markdown):
+    {
+      "caseId": "CASE-AUTO-GEN",
+      
+      "integrityStatus": "VERIFIED_AUTHENTIC" or "SUSPECTED_FAKE",
+      "integrityScore": 0-100, 
+      "integrityReasoning": "Briefly explain WHY. e.g. 'Consistent lighting shadows and natural biological movement detected.' or 'Detected pixel blurring around jawline typical of deepfakes.'",
+
+      "timeline": [
+        { "time": "MM:SS", "source": "CCTV", "type": "video", "event": "Brief description of action", "flag": "OPTIONAL_WARNING" }
+      ],
+
+      "blindSpots": [
+         { 
+           "location": "e.g. Back Alley Exit", 
+           "start": "MM:SS",
+           "end": "MM:SS",
+           "reason": "Camera blocked by object or subject moved out of frame." 
+         }
+      ],
+
+      "contradictions": [
+        // ⚠️ INSTRUCTION: Return as many items as necessary. Do not summarize.
+        { 
+          "id": 1, 
+          "severity": "CRITICAL", 
+          "title": "Short Title (e.g. Alibi Mismatch)", 
+          "claim": "Quote the specific lie (from Audio/Doc)", 
+          "evidence": "Describe the objective truth (from Video)", 
+          "confidence": 95,
+          "status": "DETECTED" 
+        },
+        {
+           "id": 2,
+           "severity": "MEDIUM",
+           "title": "Clothing Discrepancy",
+           "claim": "Suspect said 'I was wearing red'",
+           "evidence": "Subject in video is wearing blue",
+           "confidence": 90,
+           "status": "DETECTED"
+        }
+      ]
+    }
+  `;
+
+  // Add the prompt first
   parts.push(INVESTIGATOR_PROMPT);
 
   // Dynamically add evidence if provided
@@ -57,7 +89,7 @@ exports.analyzeCase = async ({ videoPath, audioPath, pdfPath, imagePath }) => {
   if (imagePath) parts.push(fileToGenerativePart(imagePath, "image/jpeg"));
 
   try {
-    // Invoke Gemini 1.5 Pro
+    // Invoke Gemini
     const result = await model.generateContent(parts);
     const response = await result.response;
     const text = response.text();
@@ -68,10 +100,17 @@ exports.analyzeCase = async ({ videoPath, audioPath, pdfPath, imagePath }) => {
     return JSON.parse(jsonString);
   } catch (error) {
     console.error("Gemini API Error:", error);
-    throw new Error("AI Reasoning Failed");
+    // Return a fallback structure so the frontend doesn't crash
+    return {
+        integrityStatus: "ERROR",
+        integrityScore: 0,
+        integrityReasoning: "AI Service Failed to Analyze. Please retry.",
+        timeline: [],
+        blindSpots: [], // 🛡️ Prevent crash
+        contradictions: []
+    };
   }
 };
-
 
 exports.chatWithCase = async (userMessage, caseContext) => {
   try {

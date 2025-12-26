@@ -4,6 +4,7 @@ const router = express.Router();
 const geminiService = require('../services/geminiService');
 const fs = require('fs');
 const crypto = require('crypto');
+const db = require('../config/firebase'); // 🆕 Import Firestore
 
 // Configure Multer to store files temporarily in 'uploads/'
 const upload = multer({ dest: 'uploads/' });
@@ -97,7 +98,6 @@ router.post('/', uploadFields, async (req, res) => {
       const f = req.files.image[0];
       filesForAI.imagePath = f.path;
       filesToDelete.push(f.path);
-      // We don't necessarily need to log ID card hash in custody for this demo, but we can:
       custodyLog.push({
         timestamp: new Date().toISOString(),
         action: "ID_VERIFICATION_SOURCE",
@@ -112,12 +112,12 @@ router.post('/', uploadFields, async (req, res) => {
       return res.status(400).json({ error: 'No evidence files provided.' });
     }
 
-    console.log('🕵️‍♀️ Sending to Gemini 1.5 Pro for analysis...');
+    console.log('🕵️‍♀️ Sending to Gemini 2.5 for analysis...');
 
     // 3. Run AI Analysis
     const analysisResult = await geminiService.analyzeCase(filesForAI);
 
-    // 4. Log Completion
+    // 4. Log Completion in Chain of Custody
     custodyLog.push({
       timestamp: new Date().toISOString(),
       action: "AI_FORENSIC_ANALYSIS",
@@ -126,18 +126,42 @@ router.post('/', uploadFields, async (req, res) => {
       status: "COMPLETED"
     });
 
-    console.log('✅ Analysis Complete. Sending results + custody log.');
+    console.log('✅ AI Analysis Complete.');
 
-    // 5. Clean up temp files (Critical for server health)
+    // 5. Prepare Final Data Object
+    const finalCaseData = {
+      ...analysisResult,
+      chainOfCustody: custodyLog,
+      createdAt: new Date().toISOString(),
+      status: 'OPEN',
+      caseTitle: `Case #${Math.floor(Math.random() * 10000)}` // Simple auto-title
+    };
+
+    // 6. 🆕 SAVE TO FIREBASE (With Logs)
+    try {
+      console.log("💾 Attempting to save case to Firebase Firestore...");
+      
+      const caseRef = await db.collection('cases').add(finalCaseData);
+      
+      console.log(`🎉 SUCCESS! Case saved to Firebase.`);
+      console.log(`🆔 Firestore Document ID: ${caseRef.id}`);
+      
+      // Add the ID to the response so Frontend knows it
+      finalCaseData.firebaseId = caseRef.id;
+
+    } catch (dbError) {
+      console.error("⚠️ FIREBASE SAVE FAILED:");
+      console.error(dbError); 
+      // We do NOT stop the app here. We continue so the user still sees the result locally.
+    }
+
+    // 7. Clean up temp files (Critical for server health)
     filesToDelete.forEach(path => {
       try { fs.unlinkSync(path); } catch(e) { console.error("Error deleting file:", e); }
     });
 
-    // 6. Return Data
-    res.json({
-      ...analysisResult,
-      chainOfCustody: custodyLog
-    });
+    // 8. Return Data to Frontend
+    res.json(finalCaseData);
 
   } catch (error) {
     console.error('❌ Investigation Failed:', error);
