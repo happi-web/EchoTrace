@@ -1,6 +1,6 @@
 # 🕵️‍♂️ EchoTrace: Autonomous AI Forensic Investigator
 
-> **Winner/Submission for [Hackathon Name] 2025**
+> **Submission for Gemini 3 Hackathon 2025**
 > *“Justice Delayed is Justice Denied. EchoTrace closes cases in seconds, not weeks.”*
 
 ## 🚨 The Problem
@@ -15,7 +15,7 @@ Finding a single lie (e.g., *“I was at Starbucks”* vs. *CCTV showing the sus
 
 ## ⚡ The Solution
 
-**EchoTrace** is an AI-powered Digital Detective. It ingests video, audio, documents, and images **simultaneously** using **Google Gemini 1.5 Pro’s multimodal capabilities**.
+**EchoTrace** is an AI-powered Digital Detective. It ingests video, audio, documents, and images **simultaneously** using **Google Gemini 3 preview’s multimodal capabilities**.
 
 It doesn't just "transcribe"—it **understands context**. It listens to the suspect's alibi, watches the security tape, and instantly flags: **"LIE DETECTED: Suspect claims to be home, but visual biometrics confirm presence at crime scene at 14:02."**
 
@@ -63,7 +63,7 @@ Generates a professional PDF Legal Report containing:
 
 | Component | Technology | Description |
 | --- | --- | --- |
-| **AI Model** | **Google Gemini 1.5 Pro** | The brain. Handles video, audio, and text analysis simultaneously. |
+| **AI Model** | **Google Gemini 3 Preview** | The brain. Handles video, audio, and text analysis simultaneously. |
 | **Frontend** | React + Vite + Tailwind | High-performance dashboard with "CSI-style" dark mode UI. |
 | **Backend** | Node.js + Express | Handles file uploads, hashing, and API orchestration. |
 | **Storage** | Multer (Temp) | Secure, ephemeral storage for processing (Privacy focused). |
@@ -81,8 +81,8 @@ Generates a professional PDF Legal Report containing:
 ### 1. Clone the Repo
 
 ```bash
-git clone https://github.com/yourusername/echotrace.git
-cd echotrace
+git clone https://github.com/happi-web/EchoTrace.git
+cd EchoTrace
 
 ```
 
